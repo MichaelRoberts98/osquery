@@ -6,7 +6,7 @@
 #  in the COPYING file in the root directory of this source tree).
 #  You may select, at your option, one of the above-listed licenses.
 
-cmake_minimum_required(VERSION 2.8.12)
+cmake_minimum_required(VERSION 3.10)
 string(ASCII 27 ESC)
 macro(WARNING_LOG MESSAGE)
   message("-- ${ESC}[31m${MESSAGE}${ESC}[m")
@@ -254,6 +254,7 @@ elseif(DEFINED ENV{SANITIZE})
     -fno-omit-frame-pointer
     -fno-optimize-sibling-calls
     -fsanitize-blacklist=${SANITIZE_BLACKLIST}
+    -O1
   )
   if (DEFINED ENV{SANITIZE_THREAD})
     add_compile_options(-fsanitize=thread)
@@ -265,6 +266,13 @@ elseif(DEFINED ENV{SANITIZE})
       # LSAN is not available on OS X 10.12.
       add_compile_options(-fsanitize=leak)
     endif()
+  endif()
+
+  if(DEFINED ENV{FUZZ})
+    add_compile_options(
+      -fsanitize=fuzzer
+    )
+    set(FUZZ TRUE)
   endif()
 
   if(LINUX)
@@ -295,6 +303,7 @@ else()
     # TSAN and MSAN do not like PIE/PIC on Linux 4.1.
     # To be safe, only include them when building 'release' outputs.
     add_compile_options(
+      -g
       -fPIE
       -fpie
       -fPIC
@@ -501,6 +510,7 @@ add_definitions(
   -DSTRIP_FLAG_HELP=1
   -DBOOST_NETWORK_ENABLE_HTTPS
   -DNOMINMAX
+  -DBOOST_CONFIG_SUPPRESS_OUTDATED_MESSAGE
 
   # See boost 1.65 breakage https://github.com/Homebrew/homebrew-core/pull/17150
   -D__ASSERT_MACROS_DEFINE_VERSIONS_WITHOUT_UNDERSCORES=0
@@ -594,6 +604,9 @@ else()
 endif()
 
 if(WINDOWS)
+  if(NOT OS_LIB_DIRS)
+    set(OS_LIB_DIRS)
+  endif()
   foreach(DEP_DIR ${WINDOWS_DEP_LIST})
     file(GLOB_RECURSE WINDOWS_LOCAL_LIB_DIRS LIST_DIRECTORIES false "${DEP_DIR}/*.lib")
     foreach(LIB_FILE ${WINDOWS_LOCAL_LIB_DIRS})

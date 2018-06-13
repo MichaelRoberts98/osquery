@@ -11,10 +11,12 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <regex>
 
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/split.hpp>
+#include <boost/property_tree/json_parser.hpp>
 
 #include <boost/asio.hpp>
 #include <boost/foreach.hpp>
@@ -63,6 +65,8 @@ namespace tables {
  *         message.
  */
 Status dockerApi(const std::string& uri, pt::ptree& tree) {
+  static const std::regex httpOkRegex("HTTP/1\\.(0|1) 200 OK\\\r");
+
   try {
     local::stream_protocol::endpoint ep(FLAGS_docker_socket);
     local::stream_protocol::iostream stream(ep);
@@ -83,7 +87,9 @@ Status dockerApi(const std::string& uri, pt::ptree& tree) {
     // All status responses are expected to be 200
     std::string str;
     getline(stream, str);
-    if (str != "HTTP/1.0 200 OK\r") {
+
+    std::smatch match;
+    if (!std::regex_match(str, match, httpOkRegex)) {
       stream.close();
       return Status(1, "Invalid docker API response for " + uri + ": " + str);
     }
@@ -411,6 +417,10 @@ QueryData genContainers(QueryContext& context) {
                                 .get<bool>("Privileged", false)
                             ? INTEGER(1)
                             : INTEGER(0);
+      r["readonly_rootfs"] = container_details.get_child("HostConfig")
+                                     .get<bool>("ReadonlyRootfs", false)
+                                 ? INTEGER(1)
+                                 : INTEGER(0);
       r["path"] = container_details.get<std::string>("Path", "");
 
       std::vector<std::string> entry_pts;
@@ -626,7 +636,7 @@ QueryData genContainerProcesses(QueryContext& context) {
     try {
       for (const auto& processes : container.get_child("Processes")) {
         std::vector<std::string> vector;
-        BOOST_FOREACH (const auto& v, processes.second) {
+        for (const auto& v : processes.second) {
           vector.push_back(v.second.data());
         }
 

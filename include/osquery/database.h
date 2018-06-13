@@ -14,11 +14,11 @@
 #include <string>
 #include <vector>
 
-#include <osquery/registry.h>
-#include <osquery/status.h>
+#include <osquery/plugin.h>
 
 namespace osquery {
 
+class Status;
 /**
  * @brief A list of supported backing storage categories: called domains.
  *
@@ -49,6 +49,9 @@ extern const std::string kEvents;
 
 /// The "domain" where the results of carve queries are stored.
 extern const std::string kCarves;
+
+/// The running version of our database schema
+extern const std::string kDatabaseResultsVersion;
 
 /**
  * @brief The "domain" where buffered log results are stored.
@@ -91,6 +94,10 @@ class DatabasePlugin : public Plugin {
                      const std::string& key,
                      std::string& value) const = 0;
 
+  virtual Status get(const std::string& domain,
+                     const std::string& key,
+                     int& value) const = 0;
+
   /**
    * @brief Store a string-represented value using a domain and key index.
    *
@@ -105,6 +112,12 @@ class DatabasePlugin : public Plugin {
   virtual Status put(const std::string& domain,
                      const std::string& key,
                      const std::string& value) = 0;
+
+  virtual Status put(const std::string& domain,
+                     const std::string& key,
+                     int value) = 0;
+
+  virtual void dumpDatabase() const = 0;
 
   /// Data removal method.
   virtual Status remove(const std::string& domain, const std::string& k) = 0;
@@ -207,6 +220,10 @@ Status getDatabaseValue(const std::string& domain,
                         const std::string& key,
                         std::string& value);
 
+Status getDatabaseValue(const std::string& domain,
+                        const std::string& key,
+                        int& value);
+
 /**
  * @brief Set or put a value into the active osquery DatabasePlugin storage.
  *
@@ -222,6 +239,10 @@ Status getDatabaseValue(const std::string& domain,
 Status setDatabaseValue(const std::string& domain,
                         const std::string& key,
                         const std::string& value);
+
+Status setDatabaseValue(const std::string& domain,
+                        const std::string& key,
+                        int value);
 
 /// Remove a domain/key identified value from backing-store.
 Status deleteDatabaseValue(const std::string& domain, const std::string& key);
@@ -247,4 +268,18 @@ void resetDatabase();
 
 /// Allow callers to scan each column family and print each value.
 void dumpDatabase();
+
+Status ptreeToRapidJSON(const std::string& in, std::string& out);
+
+/**
+ * @brief Upgrades the legacy database json format from ptree to RapidJSON
+ *
+ * This helper function was required as Boost property trees contain json
+ * which leverages empty strings for keys in json arrays. This is incompatible
+ * with rapidjson, thus we require a converter function to upgrade any cached
+ * results in the database.
+ *
+ * @return Success status of upgrading the database
+ */
+Status upgradeDatabase();
 } // namespace osquery

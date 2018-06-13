@@ -20,6 +20,7 @@
 #include <boost/bind.hpp>
 #include <boost/shared_ptr.hpp>
 
+#include <osquery/logger.h>
 #include <osquery/status.h>
 
 #ifdef DARWIN
@@ -75,7 +76,7 @@ std::vector<std::string> split(const std::string& s,
  * @return a vector of strings split by delim for occurrences.
  */
 std::vector<std::string> split(const std::string& s,
-                               const std::string& delim,
+                               char delim,
                                size_t occurences);
 
 /**
@@ -125,7 +126,7 @@ std::string join(const std::set<std::string>& s, const std::string& tok);
  * @param encoded The encode base64 string.
  * @return Decoded string.
  */
-std::string base64Decode(const std::string& encoded);
+std::string base64Decode(std::string encoded);
 
 /**
  * @brief Encode a  string.
@@ -181,6 +182,22 @@ inline Status safeStrtoll(const std::string& rep, size_t base, long long& out) {
 }
 
 /// Safely convert a string representation of an integer base.
+inline Status safeStrtoi(const std::string& rep, int base, int& out) {
+  try {
+    out = std::stoi(rep, 0, base);
+  } catch (const std::invalid_argument& ia) {
+    return Status(
+        1, std::string("If no conversion could be performed. ") + ia.what());
+  } catch (const std::out_of_range& oor) {
+    return Status(1,
+                  std::string("Value read is out of the range of representable "
+                              "values by an int. ") +
+                      oor.what());
+  }
+  return Status(0);
+}
+
+/// Safely convert a string representation of an integer base.
 inline Status safeStrtoull(const std::string& rep,
                            size_t base,
                            unsigned long long& out) {
@@ -208,6 +225,8 @@ inline std::string unescapeUnicode(const std::string& escaped) {
       long value{0};
       Status stat = safeStrtol(escaped.substr(i + 2, 4), 16, value);
       if (!stat.ok()) {
+        LOG(WARNING) << "Unescaping a string with length: " << escaped.size()
+                     << " failed at: " << i;
         return "";
       }
       if (value < 255) {
@@ -215,6 +234,13 @@ inline std::string unescapeUnicode(const std::string& escaped) {
         i += 5;
         continue;
       }
+    } else if (i < escaped.size() - 1 && '\\' == escaped[i] &&
+               '\\' == escaped[i + 1]) {
+      // In the case of \\users 'sers' is not a unicode character
+      // If we see \\ we should skip them and we do this by adding
+      // an extra jump forward.
+      unescaped += escaped[i];
+      ++i;
     }
     unescaped += escaped[i];
   }

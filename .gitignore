@@ -60,6 +60,12 @@ doxygen/latex
 \#*\#
 *.swp
 *.vscode
+.vs/
+
+# Tags
+tags
+cscope.files
+cscope.out
 
 # Ignored components
 /external/*
